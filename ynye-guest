@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Number Your Energy</title>
+
+    <!-- ===================== EXTERNAL LIBRARIES ===================== -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lunar-javascript/lunar.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- ===================== RESPONSIVE STYLES ===================== -->
+    <style>
+        /* --- Mobile (< 640px) --- */
+        @media (max-width: 639px) {
+            .result-grid { flex-direction: column !important; }
+            .result-grid > div { width: 100% !important; }
+            .part-title  { font-size: 0.75rem !important; }
+            .summary-text { font-size: 1.25rem !important; }
+            .table-cell  { padding: 0.25rem !important; font-size: 0.7rem !important; }
+        }
+
+        /* --- Large desktop (>= 1280px) --- */
+        @media (min-width: 1280px) {
+            .container-main { max-width: 1000px !important; }
+        }
+
+        /* --- Global theme --- */
+        body      { background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%); }
+        .header-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .modal-overlay { background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); }
+    </style>
+</head>
+
+<body class="min-h-screen pb-10">
+
+    <!-- Hidden Netlify form for click tracking -->
+    <form name="click_tracking" netlify hidden>
+        <input type="text" name="client_name" />
+        <input type="text" name="action_time" />
+        <input type="text" name="device_info" />
+    </form>
+
+
+    <!-- ==================== HEADER WITH AUTH ==================== -->
+    <div class="header-bg text-white p-4 shadow-lg mb-6">
+        <div class="container-main max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl sm:text-2xl font-bold">Your Number Your Energy</h1>
+
+            <div id="authArea" class="flex items-center gap-2">
+
+<!-- Member state (shown after login) -->
+                <div id="authMember" class="hidden flex items-center gap-2">
+                    <span class="bg-green-400/30 px-3 py-1 rounded-full text-xs font-semibold">Member</span>
+                    <span id="userEmail" class="text-xs opacity-80 hidden sm:inline"></span>
+                    <button onclick="showModal('profilesModal')"
+                            class="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold transition">
+                        My Profiles
+                    </button>
+                    <button onclick="logoutUser()"
+                            class="px-3 py-1 bg-red-400/30 hover:bg-red-400/50 rounded-lg text-xs font-semibold transition">
+                        Logout
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== MAIN APP CONTAINER ==================== -->
+    <div id="app-container" class="p-2 sm:p-4">
+
+        <!-- ========== CALCULATOR FORM ========== -->
+        <div class="container-main max-w-4xl mx-auto bg-white p-4 sm:p-6 rounded-xl shadow-lg mb-6 relative">
+
+            <!-- Name input -->
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Name (ชื่อ)</label>
+                <input type="text" id="clientName"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                       placeholder="Enter Name">
+            </div>
+
+            <!-- DOB / Time / Predict Year row -->
+            <div class="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Date of Birth</label>
+                    <input type="date" id="dob"
+                           class="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Time</label>
+                    <input type="time" id="birthTime" value="00:00"
+                           class="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                </div>
+                <input type="hidden" id="currentYear">
+            </div>
+
+            <!-- Action buttons -->
+            <div class="flex gap-2">
+                <button id="btnCalc" type="button"
+                        class="flex-1 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition shadow-md hover:shadow-lg text-sm sm:text-base">
+                    🧮 YNYE Code
+                </button>
+                <button type="button" onclick="resetAll()"
+                        class="py-3 px-4 bg-gray-400 text-white font-bold rounded-lg hover:bg-gray-500 transition shadow-md text-sm sm:text-base"
+                        title="Reset All">
+                    🔄 Reset
+                </button>
+                <button type="button" onclick="showModal('beConverterModal')"
+                        class="py-3 px-4 bg-amber-500 text-white font-bold rounded-lg hover:bg-amber-600 transition shadow-md text-sm sm:text-base"
+                        title="Buddhist Era Converter">
+                    📅 BE↔CE
+                </button>
+            </div>
+        </div>
+
+
+        <!-- ========== RESULT SECTION (hidden until calculation) ========== -->
+        <div id="resultSection" class="hidden container-main max-w-4xl mx-auto space-y-4">
+
+            <!-- Save buttons -->
+            <div class="flex justify-end gap-2 mb-2">
+                <button id="btnSaveProfile" type="button"
+                        class="hidden items-center gap-2 px-4 py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition shadow text-xs sm:text-sm">
+                    💾 Save Profile
+                </button>
+            </div>
+
+            <!-- Notes field (members only) -->
+            <div id="notesSection" class="hidden container-main max-w-4xl mx-auto">
+                <div class="bg-white p-4 rounded-xl shadow-lg">
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Notes (บันทึกเพิ่มเติม)</label>
+                    <textarea id="profileNotes" rows="3"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none resize-y"
+                              placeholder="Add personal notes about this customer..."></textarea>
+                </div>
+            </div>
+
+            <!-- Capture area (used by html2canvas for image export) -->
+            <div id="captureArea" class="bg-[#f3f4f6] p-4 rounded-xl">
+
+                <!-- Client name header -->
+                <div class="flex items-start justify-between mb-6 pb-4 border-b-2 border-gray-200">
+                    <div class="text-center flex-1">
+                        <h2 id="displayName" class="text-2xl sm:text-3xl font-bold text-gray-800 tracking-wide"></h2>
+                        <p id="displayDobTime" class="text-sm text-gray-500 mt-1"></p>
+                    </div>
+                    <button id="btnSaveImg" onclick="saveImage()" type="button"
+                            class="flex items-center gap-1 px-3 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition shadow text-xs shrink-0 ml-3">
+                        📷 Save PNG
+                    </button>
+                </div>
+
+                <!-- Row 1: Soul Code table + Life Code table -->
+                <div class="result-grid flex justify-center gap-3 sm:gap-4 mb-4">
+                    <div class="bg-white p-3 sm:p-4 rounded-xl shadow-lg flex-1">
+                        <h3 class="part-title text-sm font-bold text-center mb-3 text-pink-600 uppercase tracking-wider">❤️ Inner Energy</h3>
+                        <table id="innerTable" class="w-full text-center border-collapse text-xs sm:text-sm"></table>
+                    </div>
+                    <div class="bg-white p-3 sm:p-4 rounded-xl shadow-lg flex-1">
+                        <h3 class="part-title text-sm font-bold text-center mb-3 text-blue-600 uppercase tracking-wider">👤 Outer Energy</h3>
+                        <table id="outerTable" class="w-full text-center border-collapse text-xs sm:text-sm"></table>
+                    </div>
+                </div>
+
+                <!-- Row 2: Soul summary + Life summary -->
+                <div class="result-grid flex justify-center gap-3 sm:gap-4 mb-4">
+                    <!-- Soul summary -->
+                    <div class="bg-pink-50 p-4 rounded-xl shadow-md flex-1 border border-pink-100">
+                        <div class="flex justify-around items-center">
+                            <div class="text-center">
+                                <p class="text-xs text-gray-500 mb-1 font-bold">INNER ENERGY</p>
+                                <p id="innerCode" class="summary-text text-xl sm:text-3xl font-extrabold text-pink-600">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Life summary -->
+                    <div class="bg-blue-50 p-4 rounded-xl shadow-md flex-1 border border-blue-100">
+                        <div class="flex justify-around items-center">
+                            <div class="text-center">
+                                <p class="text-xs text-gray-500 mb-1 font-bold">OUTER ENERGY</p>
+                                <p id="outerCode" class="summary-text text-xl sm:text-3xl font-extrabold text-blue-600">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+            </div><!-- /captureArea -->
+
+            <!-- Reference Links Section -->
+            <div id="referenceSection" class="hidden bg-white rounded-2xl shadow-lg p-5 mt-4">
+                <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">📚 Reference — Learn Your Numbers</h3>
+                <div id="referenceLinks" class="flex flex-wrap gap-3"></div>
+            </div>
+
+        </div><!-- /resultSection -->
+    </div><!-- /app-container -->
+
+
+    <!-- ==================== LOGIN MODAL ==================== -->
+    <div id="loginModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800">Login</h2>
+                <button onclick="hideModal('loginModal')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div class="space-y-3">
+                <input type="email" id="loginEmail" placeholder="Email"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                <input type="password" id="loginPassword" placeholder="Password"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                <button onclick="loginUser()" id="btnLogin"
+                        class="w-full py-2 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition text-sm">
+                    Login
+                </button>
+                <p class="text-xs text-center text-gray-500">
+                    Don't have an account?
+                    <a href="#" onclick="hideModal('loginModal');showModal('registerModal')" class="text-purple-600 font-semibold">Register</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== REGISTER MODAL ==================== -->
+    <div id="registerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800">Register</h2>
+                <button onclick="hideModal('registerModal')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div class="space-y-3">
+                <input type="email" id="regEmail" placeholder="Email"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                <input type="password" id="regPassword" placeholder="Password (min 6 characters)"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                <input type="password" id="regPasswordConfirm" placeholder="Confirm Password"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:outline-none">
+                <button onclick="registerUser()" id="btnRegister"
+                        class="w-full py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition text-sm">
+                    Register
+                </button>
+                <p class="text-xs text-center text-gray-500">
+                    Already have an account?
+                    <a href="#" onclick="hideModal('registerModal');showModal('loginModal')" class="text-purple-600 font-semibold">Login</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== MY PROFILES MODAL ==================== -->
+    <div id="profilesModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800">My Saved Profiles</h2>
+                <button onclick="hideModal('profilesModal')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div id="profilesList" class="flex-1 overflow-y-auto space-y-2">
+                <p class="text-gray-400 text-sm text-center py-8">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== BE CONVERTER MODAL ==================== -->
+    <div id="beConverterModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-gray-800">📅 Buddhist Era Converter</h2>
+                <button onclick="hideModal('beConverterModal')" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4">Convert between Buddhist Era (พ.ศ.) and Gregorian (ค.ศ.) years. Formula: BE = CE + 543</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Buddhist Era (พ.ศ.)</label>
+                    <input type="number" id="beYear" placeholder="e.g. 2500"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                           oninput="convertBE()">
+                </div>
+                <div class="flex justify-center">
+                    <button onclick="swapBECE()"
+                            class="px-4 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-bold text-gray-600 transition">
+                        ⇅ Swap
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Gregorian (ค.ศ. / CE)</label>
+                    <input type="number" id="ceYear" placeholder="e.g. 1957"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                           oninput="convertCE()">
+                </div>
+                <button onclick="useCEYear()"
+                        class="w-full py-2 bg-amber-500 text-white font-bold rounded-lg hover:bg-amber-600 transition text-sm">
+                    Use CE Year in DOB
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== JAVASCRIPT ==================== -->
+    <script>
+    /* ================================================================
+     *  SECTION 1: SUPABASE INITIALIZATION
+     * ================================================================ */
+
+    const SUPABASE_URL = 'https://xcvnetpafrqkqshlpiug.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhjdm5ldHBhZnJxa3FzaGxwaXVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNTU0NDcsImV4cCI6MjA4ODczMTQ0N30.HTjVCQ1gSke0cEnSSTbJ9msWysK34ExedqIccWYw-5U';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    /** Currently logged-in user object (null if guest) */
+    let currentUser = null;
+
+    /** ID of the profile currently being edited (null for new profiles) */
+    let editingProfileId = null;
+
+
+    /* ================================================================
+     *  SECTION 2: APP INITIALIZATION
+     * ================================================================ */
+
+    window.onload = async function () {
+        try {
+            // Set default form values
+            document.getElementById('currentYear').value = new Date().getFullYear();
+            document.getElementById('birthTime').value = '00:00';
+
+            // Bind button events
+            document.getElementById('btnCalc').addEventListener('click', calculate);
+            document.getElementById('btnSaveImg').addEventListener('click', saveImage);
+            document.getElementById('btnSaveProfile').addEventListener('click', saveProfile);
+
+            // Check for existing auth session
+            const { data: { session } } = await sb.auth.getSession();
+            if (session) {
+                setAuthState(session.user);
+            } else {
+                safeToast("👋 Welcome — Guest Mode");
+            }
+
+            // Listen for future auth changes (login/logout from other tabs, etc.)
+            const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+                if (session) {
+                    setAuthState(session.user);
+                } else {
+                    clearAuthState();
+                }
+            });
+
+            // Clean up listener on page unload to prevent memory leaks
+            window.addEventListener('beforeunload', () => subscription.unsubscribe());
+
+        } catch (e) {
+            console.error("Initialization Error:", e);
+            safeToast("👋 Welcome — Guest Mode");
+        }
+    };
+
+
+    /* ================================================================
+     *  SECTION 3: AUTHENTICATION
+     * ================================================================ */
+
+    /**
+     * Switch the UI to "logged in" state.
+     * Shows member controls, hides guest controls.
+     * @param {object} user - Supabase user object
+     */
+    function setAuthState(user) {
+        currentUser = user;
+        document.getElementById('authGuest').classList.add('hidden');
+        document.getElementById('authMember').classList.remove('hidden');
+        document.getElementById('userEmail').textContent = user.email;
+        document.getElementById('btnSaveProfile').classList.remove('hidden');
+        document.getElementById('btnSaveProfile').classList.add('flex');
+        document.getElementById('notesSection').classList.remove('hidden');
+    }
+
+    /**
+     * Switch the UI back to "guest" state.
+     * Hides member controls, shows guest controls.
+     */
+    function clearAuthState() {
+        currentUser = null;
+        editingProfileId = null;
+        document.getElementById('authGuest').classList.remove('hidden');
+        document.getElementById('authMember').classList.add('hidden');
+        document.getElementById('userEmail').textContent = '';
+        document.getElementById('btnSaveProfile').classList.add('hidden');
+        document.getElementById('btnSaveProfile').classList.remove('flex');
+        document.getElementById('notesSection').classList.add('hidden');
+    }
+
+    /**
+     * Log in with email + password via Supabase Auth.
+     */
+    async function loginUser() {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+
+        if (!email || !password) {
+            safeToast('❌ Please fill in all fields', 'red');
+            return;
+        }
+
+        const btn = document.getElementById('btnLogin');
+        btn.textContent = 'Logging in...';
+        btn.disabled = true;
+
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+        btn.textContent = 'Login';
+        btn.disabled = false;
+
+        if (error) {
+            safeToast('❌ ' + error.message, 'red');
+        } else {
+            hideModal('loginModal');
+            safeToast('✅ Welcome back, ' + data.user.email);
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+    }
+
+    /**
+     * Register a new account via Supabase Auth.
+     */
+    async function registerUser() {
+        const email = document.getElementById('regEmail').value.trim();
+        const password = document.getElementById('regPassword').value;
+        const confirm = document.getElementById('regPasswordConfirm').value;
+
+        if (!email || !password) {
+            safeToast('❌ Please fill in all fields', 'red');
+            return;
+        }
+        if (password.length < 6) {
+            safeToast('❌ Password must be at least 6 characters', 'red');
+            return;
+        }
+        if (password !== confirm) {
+            safeToast('❌ Passwords do not match', 'red');
+            return;
+        }
+
+        const btn = document.getElementById('btnRegister');
+        btn.textContent = 'Registering...';
+        btn.disabled = true;
+
+        const { data, error } = await sb.auth.signUp({ email, password });
+
+        btn.textContent = 'Register';
+        btn.disabled = false;
+
+        if (error) {
+            safeToast('❌ ' + error.message, 'red');
+        } else {
+            hideModal('registerModal');
+            safeToast('✅ Registration successful! Please check your email to confirm.');
+            document.getElementById('regEmail').value = '';
+            document.getElementById('regPassword').value = '';
+            document.getElementById('regPasswordConfirm').value = '';
+        }
+    }
+
+    /**
+     * Sign the current user out.
+     */
+    async function logoutUser() {
+        await sb.auth.signOut();
+        safeToast('👋 Logged out');
+    }
+
+
+    /* ================================================================
+     *  SECTION 4: MODAL HELPERS
+     * ================================================================ */
+
+    /**
+     * Show a modal by ID. Auto-loads profiles if opening the profiles modal.
+     * @param {string} id - DOM element ID of the modal
+     */
+    function showModal(id) {
+        document.getElementById(id).classList.remove('hidden');
+        if (id === 'profilesModal') {
+            loadProfiles();
+        }
+    }
+
+    /**
+     * Hide a modal by ID.
+     * @param {string} id - DOM element ID of the modal
+     */
+    function hideModal(id) {
+        document.getElementById(id).classList.add('hidden');
+    }
+
+
+    /* ================================================================
+     *  SECTION 5: BUDDHIST ERA (BE) ↔ GREGORIAN (CE) CONVERTER
+     * ================================================================ */
+
+    /** Convert Buddhist Era → Gregorian (BE - 543 = CE) */
+    function convertBE() {
+        const be = parseInt(document.getElementById('beYear').value);
+        document.getElementById('ceYear').value = !isNaN(be) ? be - 543 : '';
+    }
+
+    /** Convert Gregorian → Buddhist Era (CE + 543 = BE) */
+    function convertCE() {
+        const ce = parseInt(document.getElementById('ceYear').value);
+        document.getElementById('beYear').value = !isNaN(ce) ? ce + 543 : '';
+    }
+
+    /** Swap the values between BE and CE fields */
+    function swapBECE() {
+        const be = document.getElementById('beYear').value;
+        const ce = document.getElementById('ceYear').value;
+        document.getElementById('beYear').value = ce ? parseInt(ce) + 543 : '';
+        document.getElementById('ceYear').value = be ? parseInt(be) - 543 : '';
+    }
+
+    /** Apply the CE year value into the DOB input field */
+    function useCEYear() {
+        const ce = parseInt(document.getElementById('ceYear').value);
+        if (!ce || isNaN(ce) || ce < 1 || ce > 9999) {
+            safeToast('❌ Please enter a valid year (1–9999)', 'red');
+            return;
+        }
+
+        const dobEl = document.getElementById('dob');
+        const currentVal = dobEl.value;
+
+        if (currentVal) {
+            // Replace just the year portion of the existing date
+            const parts = currentVal.split('-');
+            parts[0] = String(ce).padStart(4, '0');
+            dobEl.value = parts.join('-');
+        } else {
+            // No date set yet — default to Jan 1 of that year
+            dobEl.value = String(ce).padStart(4, '0') + '-01-01';
+        }
+
+        hideModal('beConverterModal');
+        safeToast('✅ Year ' + ce + ' (CE) applied to DOB');
+    }
+
+
+    /* ================================================================
+     *  SECTION 6: PROFILE SAVE / LOAD / DELETE (Supabase)
+     * ================================================================ */
+
+    /**
+     * Save the current calculation as a profile to Supabase.
+     * If editingProfileId is set, updates the existing record; otherwise inserts new.
+     */
+    async function saveProfile() {
+        if (!currentUser) {
+            safeToast('❌ Please login first', 'red');
+            return;
+        }
+
+        const clientName = document.getElementById('clientName').value;
+        const dobInput   = document.getElementById('dob').value;
+        const timeInput  = document.getElementById('birthTime').value;
+        const currentYear = document.getElementById('currentYear').value;
+        const notes      = document.getElementById('profileNotes').value;
+
+        if (!dobInput) {
+            safeToast('❌ Please calculate first', 'red');
+            return;
+        }
+
+        const profileData = {
+            user_id:      currentUser.id,
+            client_name:  clientName || 'Unnamed',
+            dob:          dobInput,
+            birth_time:   timeInput,
+            predict_year: parseInt(currentYear),
+            notes:        notes
+        };
+
+        // Show saving state on button
+        const btn = document.getElementById('btnSaveProfile');
+        btn.innerHTML = '⏳ Saving...';
+        btn.disabled = true;
+
+        let result;
+        if (editingProfileId) {
+            // Update existing profile (don't overwrite user_id)
+            delete profileData.user_id;
+            result = await sb.from('profiles')
+                .update(profileData)
+                .eq('id', editingProfileId)
+                .eq('user_id', currentUser.id);
+        } else {
+            // Insert new profile
+            result = await sb.from('profiles').insert(profileData).select();
+        }
+
+        btn.innerHTML = '💾 Save Profile';
+        btn.disabled = false;
+
+        if (result.error) {
+            safeToast('❌ Save failed: ' + result.error.message, 'red');
+        } else {
+            safeToast('✅ Profile saved!');
+            // Track the new profile ID so subsequent saves update rather than duplicate
+            if (!editingProfileId && result.data && result.data[0]) {
+                editingProfileId = result.data[0].id;
+            }
+        }
+    }
+
+    /**
+     * Load the list of saved profiles for the current user and render them.
+     */
+    async function loadProfiles() {
+        if (!currentUser) return;
+
+        const { data, error } = await sb.from('profiles')
+            .select('id, client_name, dob, birth_time, predict_year, notes, created_at, updated_at')
+            .eq('user_id', currentUser.id)
+            .order('updated_at', { ascending: false });
+
+        const container = document.getElementById('profilesList');
+
+        if (error) {
+            container.innerHTML = '<p class="text-red-500 text-sm text-center py-4">Error loading profiles</p>';
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-gray-400 text-sm text-center py-8">No saved profiles yet. Calculate and save your first profile!</p>';
+            return;
+        }
+
+        container.innerHTML = data.map(p => `
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                <div class="flex-1 cursor-pointer" onclick="loadProfile('${p.id}')">
+                    <p class="font-bold text-sm text-gray-800">${escapeHtml(p.client_name)}</p>
+                    <p class="text-xs text-gray-500">DOB: ${p.dob} | Time: ${p.birth_time} | Year: ${p.predict_year}</p>
+                    ${p.notes ? '<p class="text-xs text-gray-400 mt-1 truncate max-w-xs">' + escapeHtml(p.notes) + '</p>' : ''}
+                    <p class="text-[10px] text-gray-300 mt-1">Updated: ${new Date(p.updated_at).toLocaleString('th-TH')}</p>
+                </div>
+                <div class="flex gap-1 ml-2">
+                    <button onclick="loadProfile('${p.id}')" class="px-2 py-1 bg-purple-100 text-purple-600 rounded text-xs font-bold hover:bg-purple-200 transition">Load</button>
+                    <button onclick="deleteProfile('${p.id}')" class="px-2 py-1 bg-red-100 text-red-600 rounded text-xs font-bold hover:bg-red-200 transition">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Load a single profile by ID, populate the form inputs, and restore saved results.
+     * @param {string} id - Profile UUID from Supabase
+     */
+    async function loadProfile(id) {
+        const { data, error } = await sb.from('profiles')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error || !data) {
+            safeToast('❌ Failed to load profile', 'red');
+            return;
+        }
+
+        // Fill form inputs with saved data
+        document.getElementById('clientName').value   = data.client_name;
+        document.getElementById('dob').value          = data.dob;
+        document.getElementById('birthTime').value    = data.birth_time;
+        document.getElementById('currentYear').value  = data.predict_year;
+        document.getElementById('profileNotes').value = data.notes || '';
+        editingProfileId = data.id;
+
+        hideModal('profilesModal');
+        calculate();
+        editingProfileId = data.id; // restore after calculate() resets it
+        safeToast('✅ Profile loaded: ' + data.client_name);
+    }
+
+    /**
+     * Delete a profile by ID after user confirmation.
+     * @param {string} id - Profile UUID from Supabase
+     */
+    async function deleteProfile(id) {
+        if (!confirm('Are you sure you want to delete this profile?')) return;
+
+        const { error } = await sb.from('profiles')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', currentUser.id);
+
+        if (error) {
+            safeToast('❌ Delete failed', 'red');
+        } else {
+            safeToast('✅ Profile deleted');
+            if (editingProfileId === id) editingProfileId = null;
+            loadProfiles();
+        }
+    }
+
+    /**
+     * Escape HTML special characters to prevent XSS when rendering user input.
+     * @param {string} str - Raw string to escape
+     * @returns {string} Escaped HTML string
+     */
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+
+    /* ================================================================
+     *  SECTION 7: CORE CALCULATION ENGINE
+     * ================================================================ */
+
+    /**
+     * Compute all derived numerology data for a given date.
+     * Eliminates the duplicated inner/outer calculation blocks.
+     */
+    function computeAllCodes(year, month, day, hour, mins) {
+        const code = calculateCode(year, month, day, hour, mins);
+        return { code };
+    }
+
+    /** Element ID mapping for inner/outer result sections */
+    const NUMBER_LINKS = {
+        0: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%84%E0%B8%A7%E0%B8%B2%E0%B8%A1%E0%B8%AB%E0%B8%A1%E0%B8%B2%E0%B8%A2%E0%B8%82%E0%B8%AD%E0%B8%87%E0%B9%80%E0%B8%A5%E0%B8%82%200-7648259201126435604',
+        1: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%201-7648257848950655765',
+        2: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%202-7648258073216535317',
+        3: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%203-7648258530399111956',
+        4: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%204-7648258704116288277',
+        5: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%205-7648258548796099348',
+        6: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%206-7648258846460496661',
+        7: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%207-7648182297622055700',
+        8: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%208-7648259128884415252',
+        9: 'https://www.tiktok.com/@yournumberyourenergy/playlist/%E0%B8%A3%E0%B8%AB%E0%B8%B1%E0%B8%AA%E0%B8%8A%E0%B8%B5%E0%B8%A7%E0%B8%B4%E0%B8%95%209-7648258852126100244'
+    };
+
+    function renderReferenceLinks(codeInner, codeOuter) {
+        const nums = [...new Set([codeInner, codeOuter])]; // dedupe if same number
+        const container = document.getElementById('referenceLinks');
+        container.innerHTML = nums.map(n => `
+            <a href="${NUMBER_LINKS[n]}" target="_blank" rel="noopener noreferrer"
+               class="flex items-center gap-2 px-4 py-3 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition text-purple-700 font-bold text-sm shadow-sm">
+                <span class="text-2xl font-extrabold text-purple-600">${n}</span>
+                <span>Number ${n} →</span>
+            </a>`).join('');
+        document.getElementById('referenceSection').classList.remove('hidden');
+    }
+
+    const RESULT_IDS = {
+        inner: { table: 'innerTable', code: 'innerCode' },
+        outer: { table: 'outerTable', code: 'outerCode' }
+    };
+
+    /** Clear all result elements for both inner and outer. */
+    function clearAllResults() {
+        for (const type of ['inner', 'outer']) {
+            const ids = RESULT_IDS[type];
+            document.getElementById(ids.table).innerHTML  = '';
+            document.getElementById(ids.code).textContent = '-';
+        }
+    }
+
+    /**
+     * Render all result elements for one code type (inner or outer).
+     */
+    function renderCodeResults(type, data, year, month, day, hour, mins, theme) {
+        const ids = RESULT_IDS[type];
+        document.getElementById(ids.table).innerHTML  = generateTable(year, month, day, hour, mins, data.code, theme.border, theme.bg, theme.text);
+        document.getElementById(ids.code).textContent = data.code.dateResult;
+    }
+
+    /**
+     * Main calculation entry point. Reads form inputs, runs inner + outer
+     * code calculations, and renders all results to the DOM.
+     */
+    function calculate() {
+        try {
+            const clientName  = document.getElementById('clientName').value;
+            const dobInput    = document.getElementById('dob').value;
+            const timeInput   = document.getElementById('birthTime').value;
+            const currentYear = parseInt(document.getElementById('currentYear').value);
+
+            if (!dobInput) {
+                safeToast('❌ Please select a Date of Birth', "red");
+                return;
+            }
+            if (!currentYear || isNaN(currentYear)) {
+                safeToast('❌ Please enter a valid Predict Year', 'red');
+                return;
+            }
+
+            trackClick(clientName);
+            editingProfileId = null; // New calculation = new profile
+
+            // Parse date and time
+            const [year, month, day] = dobInput.split('-').map(Number);
+            const [hour, mins] = timeInput ? timeInput.split(':').map(Number) : [0, 0];
+
+            // --- Convert Gregorian to Lunar date for the Life Code ---
+            let lunarYear, lunarMonth, lunarDay;
+
+            if (typeof Solar === 'undefined') {
+                console.error("Lunar Library not loaded");
+                safeToast("⚠️ Library Error: Please check internet connection", "red");
+                // Fallback: use Gregorian date as-is
+                lunarYear  = year;
+                lunarMonth = month;
+                lunarDay   = day;
+            } else {
+                try {
+                    const solar = Solar.fromYmd(year, month, day);
+                    const lunar = solar.getLunar();
+                    lunarYear  = lunar.getYear();
+                    lunarMonth = Math.abs(lunar.getMonth());
+                    lunarDay   = Math.abs(lunar.getDay());
+                } catch (e) {
+                    console.warn("Lunar conversion failed:", e);
+                    lunarYear  = year;
+                    lunarMonth = month;
+                    lunarDay   = day;
+                }
+            }
+
+            // --- Compute both codes using shared helper ---
+            const innerData = computeAllCodes(year, month, day, hour, mins);
+            const outerData = computeAllCodes(lunarYear, lunarMonth, lunarDay, hour, mins);
+
+            const sumInner  = innerData.code.dateSum;   // e.g. 34
+            const codeInner = innerData.code.startNum;  // e.g. 7
+            const sumOuter  = outerData.code.dateSum;   // e.g. 36
+            const codeOuter = outerData.code.startNum;  // e.g. 9
+
+            // --- UPDATE THE DOM ---
+
+            // Header
+            document.getElementById('displayName').textContent = clientName || "Guest Analysis";
+            document.getElementById('displayDobTime').textContent = `DOB: ${dobInput} | Time: ${timeInput}`;
+
+            // Render both code types using shared helper
+            renderCodeResults('inner', innerData, year, month, day, hour, mins,
+                { border: 'border-pink-200', bg: 'bg-pink-100', text: 'text-pink-600' });
+            renderCodeResults('outer', outerData, lunarYear, lunarMonth, lunarDay, hour, mins,
+                { border: 'border-blue-200', bg: 'bg-blue-100', text: 'text-blue-600' });
+
+            // Reference links
+            renderReferenceLinks(codeInner, codeOuter);
+
+            // Show results and scroll into view
+            document.getElementById('resultSection').classList.remove('hidden');
+            document.getElementById('resultSection').scrollIntoView({ behavior: 'smooth' });
+
+        } catch (err) {
+            console.error("Calculation Error:", err);
+            safeToast("❌ An error occurred during calculation", "red");
+        }
+    }
+
+    /**
+     * Reset the entire form and results to their default state.
+     */
+    function resetAll() {
+        document.getElementById('clientName').value   = '';
+        document.getElementById('dob').value          = '';
+        document.getElementById('birthTime').value    = '00:00';
+        document.getElementById('currentYear').value  = new Date().getFullYear();
+        document.getElementById('profileNotes').value = '';
+
+        // Clear all result displays
+        document.getElementById('resultSection').classList.add('hidden');
+        document.getElementById('referenceSection').classList.add('hidden');
+        document.getElementById('referenceLinks').innerHTML = '';
+        clearAllResults();
+        document.getElementById('displayName').textContent = '';
+        document.getElementById('displayDobTime').textContent = '';
+
+        editingProfileId = null;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        safeToast('🔄 Reset complete');
+    }
+
+    /**
+     * Capture the result area as a PNG image and trigger a download.
+     */
+    function saveImage() {
+        const btn = document.getElementById('btnSaveImg');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = "⏳ Saving...";
+        btn.disabled = true;
+
+        const element = document.getElementById('captureArea');
+        element.scrollIntoView({ behavior: "instant", block: "start" });
+
+        // Short delay to let the browser finish rendering/scrolling
+        setTimeout(() => {
+            html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                backgroundColor: "#f3f4f6",
+                logging: false,
+                imageTimeout: 0
+            }).then(canvas => {
+                const link = document.createElement('a');
+                const name = document.getElementById('clientName').value || "SoulCode";
+                const safeName = name.replace(/[^a-z0-9ก-๙]/gi, '_');
+                link.download = `${safeName}_Analysis.png`;
+                link.href = canvas.toDataURL("image/png");
+                link.click();
+
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                safeToast("✅ Image Saved!");
+            }).catch(err => {
+                console.error(err);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                safeToast("❌ Error saving image", "red");
+            });
+        }, 500);
+    }
+
+
+    /* ================================================================
+     *  SECTION 8: NUMEROLOGY MATH HELPERS
+     * ================================================================ */
+
+    /** Pad a number to 2 digits: 3 → "03", 12 → "12" */
+    const pad2 = (n) => String(n).padStart(2, '0');
+
+    /**
+     * Sum all individual digits of a number string.
+     * Example: "1987" → 1+9+8+7 = 25
+     * @param {string} numStr
+     * @returns {number}
+     */
+    function sumDigits(numStr) {
+        return String(numStr)
+            .split('')
+            .reduce((sum, digit) => sum + parseInt(digit), 0);
+    }
+
+    /**
+     * Repeatedly sum digits until a single digit is reached.
+     * Returns an array of all intermediate values.
+     * Example: 25 → [25, 7]
+     * @param {number} num
+     * @returns {number[]}
+     */
+    function reduceNumber(num) {
+        const steps = [num];
+        while (num >= 10) {
+            num = String(num)
+                .split('')
+                .reduce((sum, digit) => sum + parseInt(digit), 0);
+            steps.push(num);
+        }
+        return steps;
+    }
+
+    /**
+     * Join reduction steps with "/" for display.
+     * Example: [25, 7] → "25/7"
+     * @param {number[]} steps
+     * @returns {string}
+     */
+    function formatResult(steps) {
+        return steps.join('/');
+    }
+
+    /**
+     * Core numerology calculation: cumulative digit sum through year → month → date → hour → mins.
+     *
+     * Each step adds the digit sum of that component to a running total, then reduces.
+     *
+     * @param {number} year  - Birth year (Gregorian or Lunar)
+     * @param {number} month - Birth month
+     * @param {number} day   - Birth day
+     * @param {number} hour  - Birth hour (0-23)
+     * @param {number} mins  - Birth minutes (0-59)
+     * @returns {{
+     *   yearResult: string,
+     *   monthResult: string,
+     *   dateResult: string,
+     *   hourResult: string,
+     *   minsResult: string,
+     *   startNum: number
+     * }}
+     */
+    function calculateCode(year, month, day, hour, mins) {
+        // Step 1: Year — sum digits of the year
+        let runningSum = sumDigits(year);
+        const yearResult = formatResult(reduceNumber(runningSum));
+
+        // Step 2: Month — add digit sum of month (2-digit padded)
+        runningSum += sumDigits(pad2(month));
+        const monthResult = formatResult(reduceNumber(runningSum));
+
+        // Step 3: Date — add digit sum of day (2-digit padded)
+        runningSum += sumDigits(pad2(day));
+        const dateSteps = reduceNumber(runningSum);
+        const dateResult = formatResult(dateSteps);
+        const dateSum  = dateSteps[0];                    // Unreduced sum (e.g. 34, 36)
+        const startNum = dateSteps[dateSteps.length - 1]; // Final single digit (e.g. 7, 9)
+
+        // Step 4 & 5: Hour and Minutes (only if not 00:00)
+        let hourResult = '-';
+        let minsResult = '-';
+
+        if (hour !== 0 || mins !== 0) {
+            runningSum += sumDigits(pad2(hour));
+            hourResult = formatResult(reduceNumber(runningSum));
+
+            runningSum += sumDigits(pad2(mins));
+            minsResult = formatResult(reduceNumber(runningSum));
+        }
+
+        return {
+            yearResult,
+            monthResult,
+            dateResult,
+            hourResult,
+            minsResult,
+            dateSum,
+            startNum
+        };
+    }
+
+
+    /* ================================================================
+     *  SECTION 9: TABLE GENERATOR
+     * ================================================================ */
+
+    /**
+     * Generate the breakdown table (Year → Month → Date → Hour → Mins)
+     * showing raw values in the first row and calculated results in the second.
+     *
+     * @param {number} year
+     * @param {number} month
+     * @param {number} day
+     * @param {number} hour
+     * @param {number} mins
+     * @param {object} code        - Output of calculateCode()
+     * @param {string} borderClass - Tailwind border class
+     * @param {string} bgClass     - Tailwind background class for header
+     * @param {string} textClass   - Tailwind text color class for results
+     * @returns {string} HTML table string
+     */
+    function generateTable(year, month, day, hour, mins, code, borderClass, bgClass, textClass) {
+        return `
+            <thead>
+                <tr class="${bgClass}">
+                    <th class="table-cell border ${borderClass} px-1 sm:px-2 py-1 text-gray-600">Year</th>
+                    <th class="table-cell border ${borderClass} px-1 sm:px-2 py-1 text-gray-600">Month</th>
+                    <th class="table-cell border ${borderClass} px-1 sm:px-2 py-1 text-gray-600">Date</th>
+                    <th class="table-cell border ${borderClass} px-1 sm:px-2 py-1 text-gray-600">Hour</th>
+                    <th class="table-cell border ${borderClass} px-1 sm:px-2 py-1 text-gray-600">Mins</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="table-cell border ${borderClass} px-1 sm:px-2 py-1">${year}</td>
+                    <td class="table-cell border ${borderClass} px-1 sm:px-2 py-1">${pad2(month)}</td>
+                    <td class="table-cell border ${borderClass} px-1 sm:px-2 py-1">${pad2(day)}</td>
+                    <td class="table-cell border ${borderClass} px-1 sm:px-2 py-1">${pad2(hour)}</td>
+                    <td class="table-cell border ${borderClass} px-1 sm:px-2 py-1">${pad2(mins)}</td>
+                </tr>
+            </tbody>`;
+    }
+
+
+    /* ================================================================
+     *  SECTION 13: UTILITIES
+     * ================================================================ */
+
+    /**
+     * Show a toast notification using Toastify.js (falls back to console.log).
+     * @param {string} msg   - Message to display
+     * @param {string} color - "green" (default) or "red"
+     */
+    function safeToast(msg, color = "green") {
+        if (typeof Toastify !== 'undefined') {
+            Toastify({
+                text: msg,
+                duration: 3000,
+                style: {
+                    background: color === "red" ? "#ef4444" : "#10b981",
+                    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
+                },
+                gravity: "top",
+                position: "center"
+            }).showToast();
+        } else {
+            console.log(msg);
+        }
+    }
+
+    /**
+     * Detect the user's device type from the user agent string.
+     * @returns {string} Device description with emoji
+     */
+    function getDeviceType() {
+        const ua = navigator.userAgent;
+        if (/Android/i.test(ua))        return "📱 Android";
+        if (/iPhone|iPad|iPod/i.test(ua)) return "📱 iOS (iPhone/iPad)";
+        if (/Windows/i.test(ua))        return "💻 Windows PC";
+        if (/Mac/i.test(ua))            return "💻 Mac";
+        if (/Linux/i.test(ua))          return "🐧 Linux";
+        return "❓ Other Device";
+    }
+
+    /**
+     * Submit a click tracking event to Netlify forms.
+     * @param {string} name - Client name entered in the form
+     */
+    function trackClick(name) {
+        const formData = new FormData();
+        formData.append('form-name', 'click_tracking');
+        formData.append('client_name', name || 'Anonymous');
+        formData.append('action_time', new Date().toLocaleString('th-TH'));
+        formData.append('device_info', getDeviceType());
+
+        fetch('/', {
+            method: 'POST',
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams(formData).toString()
+        }).catch(error => console.log('Tracking Error:', error));
+    }
+
+    </script>
+</body>
+</html>
